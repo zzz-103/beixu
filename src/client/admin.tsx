@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -22,7 +21,6 @@ import {
   MessageCircle,
   Plus,
   Search,
-  ShieldCheck,
   Upload,
   X,
 } from 'lucide-react';
@@ -32,6 +30,7 @@ import {
   json,
   Link,
   useApp,
+  useNavigationGuard,
   useRemote,
 } from './core';
 import {
@@ -46,6 +45,7 @@ import {
   Photo,
   Sheet,
   Tabs,
+  Top,
   Toggle,
 } from './ui';
 import type {
@@ -91,38 +91,7 @@ function timeText(value: string | null) {
 }
 
 function OwnerHeader({ title }: { title: string }) {
-  const { navigate, notify, refresh } = useApp();
-  const [busy, setBusy] = useState(false);
-  const logout = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await api('/api/owner/logout', json({}));
-      await refresh();
-      navigate('/owner/login');
-    } catch (error) {
-      notify(errorText(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <header className="admin-header">
-      <Link to="/owner/board" className="admin-brand" aria-label="返回制作台">
-        杯序
-      </Link>
-      <span className="admin-header-title">{title}</span>
-      <button
-        className="admin-icon-button"
-        type="button"
-        aria-label="退出店主账号"
-        onClick={logout}
-        disabled={busy}
-      >
-        <LogOut size={18} />
-      </button>
-    </header>
-  );
+  return <Top title={title} back={title === '店主制作台' ? '/menu' : '/owner/board'} />;
 }
 
 function OwnerLayout({
@@ -177,14 +146,13 @@ function OwnerLogin() {
   };
 
   return (
-    <section className="admin-login page-content">
+    <>
+      <Top title="店主入口" back="/login" />
+      <section className="admin-login page-content">
       <div className="admin-login-mark" aria-hidden="true">
         <Coffee size={38} strokeWidth={1.35} />
-        <Leaf size={18} />
       </div>
-      <p className="admin-overline">Behind the coffee bar.</p>
       <h1>照看一下小店。</h1>
-      <p className="admin-login-copy">把一杯咖啡，做成朋友喜欢的样子。</p>
       <form noValidate onSubmit={submit}>
         <div className="admin-secret-field">
           <label htmlFor="owner-passphrase">店主口令</label>
@@ -220,13 +188,11 @@ function OwnerLogin() {
           进入制作台
         </Button>
       </form>
-      <p className="admin-login-hint">
-        <ShieldCheck size={16} /> 店主验证与朋友的数字 ID 分开
-      </p>
       <Link className="admin-friend-link" to="/login">
-        返回朋友登录 <ArrowRight size={14} />
+        返回登录
       </Link>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -242,6 +208,9 @@ function Board() {
     }
   });
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [transitionBusy, setTransitionBusy] = useState<Record<string, boolean>>({});
+  const transitionKeys = useRef(new Set<string>());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const dirtyNotes = useRef(new Set<string>());
   const seenIds = useRef(new Set<string>());
@@ -292,6 +261,9 @@ function Board() {
   };
 
   const mutateOrder = async (id: string, status: 'making' | 'done') => {
+    if (transitionKeys.current.has(id)) return;
+    transitionKeys.current.add(id);
+    setTransitionBusy((current) => ({ ...current, [id]: true }));
     const order = data?.orders.find((item) => item.id === id);
     try {
       await api(`/api/owner/orders/${encodeURIComponent(id)}`, json({ status, ownerNote: drafts[id] || '' }, 'PATCH'));
@@ -301,11 +273,19 @@ function Board() {
     } catch (actionError) {
       notify(errorText(actionError));
       if (order) setDrafts((current) => ({ ...current, [id]: current[id] ?? order.ownerNote }));
+    } finally {
+      transitionKeys.current.delete(id);
+      setTransitionBusy((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
     }
   };
 
   const cancelOrder = async () => {
-    if (!cancelId) return;
+    if (!cancelId || cancelBusy) return;
+    setCancelBusy(true);
     try {
       await api(`/api/orders/${encodeURIComponent(cancelId)}/cancel`, json({}));
       notify('订单已取消，记录会保留。');
@@ -313,6 +293,8 @@ function Board() {
       await reload();
     } catch (actionError) {
       notify(errorText(actionError));
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -350,6 +332,7 @@ function Board() {
           key={order.id}
           order={order}
           note={drafts[order.id] ?? order.ownerNote}
+          busy={!!transitionBusy[order.id]}
           onNote={(value) => updateNote(order.id, value)}
           onAdvance={(status) => void mutateOrder(order.id, status)}
           onCancel={() => setCancelId(order.id)}
@@ -367,7 +350,7 @@ function Board() {
             <button type="button" className="text-action" onClick={() => setCancelId(null)}>
               继续制作
             </button>
-            <button type="button" className="admin-danger-action" onClick={() => void cancelOrder()}>
+            <button type="button" className="admin-danger-action" disabled={cancelBusy} onClick={() => void cancelOrder()}>
               确认取消
             </button>
           </div>
@@ -380,12 +363,14 @@ function Board() {
 function QueueCard({
   order,
   note,
+  busy,
   onNote,
   onAdvance,
   onCancel,
 }: {
   order: BoardData['orders'][number];
   note: string;
+  busy: boolean;
   onNote: (value: string) => void;
   onAdvance: (status: 'making' | 'done') => void;
   onCancel: () => void;
@@ -416,9 +401,9 @@ function QueueCard({
       <div className="queue-card-actions">
         <small><Clock3 size={14} /> {timeText(order.createdAt)} 下单</small>
         {order.status === 'queued' ? (
-          <Button onClick={() => onAdvance('making')}>开始制作</Button>
+          <Button busy={busy} onClick={() => onAdvance('making')}>开始制作</Button>
         ) : order.status === 'making' ? (
-          <Button onClick={() => onAdvance('done')}><Check size={15} /> 标记完成</Button>
+          <Button busy={busy} onClick={() => onAdvance('done')}><Check size={15} /> 标记完成</Button>
         ) : (
           <span className="admin-completed-copy">{order.review ? `★ ${order.review.stars} · 已评价` : '还没有留下评价'}</span>
         )}
@@ -474,35 +459,47 @@ function Manage() {
   const { menu, reloadMenu, notify } = useApp();
   const [tab, setTab] = useState<AdminTab>('products');
   const [editor, setEditor] = useState<{ kind: EditorKind; data: Product | Bean | Category; dirty: boolean } | null>(null);
+  const [pendingEditor, setPendingEditor] = useState<{ kind: EditorKind; data: Product | Bean | Category } | null>(null);
   const [editorError, setEditorError] = useState('');
   const [editorFields, setEditorFields] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [pendingLeave, setPendingLeave] = useState(false);
   const [pendingTab, setPendingTab] = useState<AdminTab | null>(null);
   const editorRef = useRef<HTMLElement>(null);
+  const navGuard = useNavigationGuard(!!editor?.dirty);
+  const mutationKeys = useRef(new Set<string>());
 
-  useEffect(() => {
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!editor?.dirty) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [editor?.dirty]);
+  const runMutation = async <T,>(key: string, work: () => Promise<T>) => {
+    if (mutationKeys.current.has(key)) return null;
+    mutationKeys.current.add(key);
+    try {
+      return await work();
+    } finally {
+      mutationKeys.current.delete(key);
+    }
+  };
 
   const closeEditor = () => {
     if (editor?.dirty) setPendingLeave(true);
     else setEditor(null);
   };
 
-  const begin = (kind: EditorKind, value?: Product | Bean | Category) => {
-    if (!menu) return;
-    const data = value ? structuredClone(value) : kind === 'products' ? blankProduct(menu) : kind === 'beans' ? blankBean() : blankCategory(menu.categories.length);
+  const openEditor = (kind: EditorKind, data: Product | Bean | Category) => {
     setEditor({ kind, data, dirty: false });
     setEditorError('');
     setEditorFields({});
     requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const begin = (kind: EditorKind, value?: Product | Bean | Category) => {
+    if (!menu) return;
+    const data = value ? structuredClone(value) : kind === 'products' ? blankProduct(menu) : kind === 'beans' ? blankBean() : blankCategory(menu.categories.length);
+    if (editor?.dirty) {
+      setPendingEditor({ kind, data });
+      setPendingLeave(true);
+      return;
+    }
+    openEditor(kind, data);
   };
 
   const patchEditor = (patch: Partial<Product> | Partial<Bean> | Partial<Category>) => {
@@ -512,7 +509,8 @@ function Manage() {
 
   const validate = () => {
     if (!editor || !menu) return false;
-    const data = editor.data;
+    const extraInput = editor.kind === 'products' ? editorRef.current?.querySelector<HTMLInputElement>('input[name="extraOptions"]') : null;
+    const data = editor.kind === 'products' && extraInput ? { ...editor.data, extraOptions: extraInput.value.split('、').map((value) => value.trim()).filter(Boolean) } as Product : editor.data;
     const errors: Errors = {};
     if (!data.name.trim()) errors.name = '请填写名称。';
     const currentList = editor.kind === 'products' ? menu.products : editor.kind === 'beans' ? menu.beans : menu.categories;
@@ -536,14 +534,16 @@ function Manage() {
 
   const save = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!editor || !validate()) return;
+    if (saving || !editor || !validate()) return;
+    const extraInput = editor.kind === 'products' ? editorRef.current?.querySelector<HTMLInputElement>('input[name="extraOptions"]') : null;
+    const data = editor.kind === 'products' && extraInput ? { ...editor.data, extraOptions: extraInput.value.split('、').map((value) => value.trim()).filter(Boolean) } as Product : editor.data;
     setSaving(true);
     try {
       const endpoint = `/api/owner/${editor.kind}`;
-      const isNew = !editor.data.id;
-      const url = isNew ? endpoint : `${endpoint}/${encodeURIComponent(editor.data.id)}`;
+      const isNew = !data.id;
+      const url = isNew ? endpoint : `${endpoint}/${encodeURIComponent(data.id)}`;
       const method = isNew ? 'POST' : 'PUT';
-      await api(url, json(editor.data, method));
+      await api(url, json(data, method));
       await reloadMenu();
       notify('已经保存，朋友端也更新啦。');
       setEditor(null);
@@ -557,23 +557,27 @@ function Manage() {
   };
 
   const toggleIngredient = async (name: string, value: boolean) => {
-    try {
-      await api('/api/owner/ingredients', json({ [name]: value }, 'PATCH'));
-      await reloadMenu();
-      notify(value ? `${name}已恢复供应。` : `${name}已标记暂缺。`);
-    } catch (error) {
-      notify(errorText(error));
-    }
+    await runMutation(`ingredient:${name}`, async () => {
+      try {
+        await api('/api/owner/ingredients', json({ [name]: value }, 'PATCH'));
+        await reloadMenu();
+        notify(value ? `${name}已恢复供应。` : `${name}已标记暂缺。`);
+      } catch (error) {
+        notify(errorText(error));
+      }
+    });
   };
 
   const toggleRow = async (kind: 'products' | 'beans' | 'categories', item: Product | Bean | Category) => {
     const next = { ...item, ...(kind === 'categories' ? { enabled: !(item as Category).enabled } : { available: !(item as Product | Bean).available }) };
-    try {
-      await api(`/api/owner/${kind}/${encodeURIComponent(item.id)}`, json(next, 'PUT'));
-      await reloadMenu();
-    } catch (error) {
-      notify(errorText(error));
-    }
+    await runMutation(`row:${kind}:${item.id}`, async () => {
+      try {
+        await api(`/api/owner/${kind}/${encodeURIComponent(item.id)}`, json(next, 'PUT'));
+        await reloadMenu();
+      } catch (error) {
+        notify(errorText(error));
+      }
+    });
   };
 
   const moveCategory = async (index: number, delta: -1 | 1) => {
@@ -582,12 +586,14 @@ function Manage() {
     const target = index + delta;
     if (target < 0 || target >= categories.length) return;
     [categories[index], categories[target]] = [categories[target], categories[index]];
-    try {
-      await api('/api/owner/categories/order', json({ ids: categories.map((category) => category.id) }, 'PUT'));
-      await reloadMenu();
-    } catch (error) {
-      notify(errorText(error));
-    }
+    await runMutation('categories:order', async () => {
+      try {
+        await api('/api/owner/categories/order', json({ ids: categories.map((category) => category.id) }, 'PUT'));
+        await reloadMenu();
+      } catch (error) {
+        notify(errorText(error));
+      }
+    });
   };
 
   if (!menu) return <Loading />;
@@ -597,41 +603,41 @@ function Manage() {
     <OwnerLayout active="manage" title="菜单与豆单">
       <div className="admin-page-heading compact">
         <div>
-          <p className="admin-overline">Keep the good things coming.</p>
-          <h1>今天，供应这些。</h1>
-          <p>把喜欢的味道，留在菜单里。</p>
+          <h1>菜单与豆单</h1>
         </div>
-        <button type="button" className="text-action" onClick={() => begin(tab)}><Plus size={16} /> 新增</button>
+        {!editor ? <button type="button" className="text-action" onClick={() => begin(tab)}><Plus size={16} /> 新增</button> : null}
       </div>
       <Tabs items={['饮品', '咖啡豆', '分类']} value={tab === 'products' ? '饮品' : tab === 'beans' ? '咖啡豆' : '分类'} onChange={(value) => { const nextTab = value === '饮品' ? 'products' : value === '咖啡豆' ? 'beans' : 'categories'; if (editor?.dirty) { setPendingTab(nextTab); setPendingLeave(true); return; } setTab(nextTab); setEditor(null); }} />
-      <section className="admin-ingredient-box">
-        <h2><Leaf size={16} /> 奶类供应</h2>
-        {['牛奶', '燕麦奶'].map((name) => (
-          <div className="admin-setting-row" key={name}>
-            <div><strong>{name}</strong><p>{menu.ingredients[name] ? '今天还有' : '今天用完了'}</p></div>
-            <Toggle label={`${name}供应`} value={!!menu.ingredients[name]} onChange={(value) => void toggleIngredient(name, value)} />
-          </div>
-        ))}
-      </section>
-      <div className="admin-section-heading">
-        <h2>{tab === 'products' ? '饮品菜单' : tab === 'beans' ? '今日豆单' : '菜单分类'}</h2>
-        <span>{activeItems.length} 项</span>
-      </div>
-      <div className="admin-management-list">
-        {activeItems.map((item, index) => (
-          <ManageRow
-            key={item.id}
-            kind={tab}
-            item={item}
-            index={index}
-            total={activeItems.length}
-            onEdit={() => begin(tab, item)}
-            onToggle={() => void toggleRow(tab, item)}
-            onMove={(delta) => void moveCategory(index, delta)}
-            menu={menu}
-          />
-        ))}
-      </div>
+      {!editor ? <>
+        <div className="admin-section-heading">
+          <h2>{tab === 'products' ? '饮品菜单' : tab === 'beans' ? '咖啡豆' : '分类'}</h2>
+          <span>{activeItems.length} 项</span>
+        </div>
+        <div className="admin-management-list">
+          {activeItems.map((item, index) => (
+            <ManageRow
+              key={item.id}
+              kind={tab}
+              item={item}
+              index={index}
+              total={activeItems.length}
+              onEdit={() => begin(tab, item)}
+              onToggle={() => void toggleRow(tab, item)}
+              onMove={(delta) => void moveCategory(index, delta)}
+              menu={menu}
+            />
+          ))}
+        </div>
+        {tab === 'products' ? <section className="admin-ingredient-box">
+          <h2><Leaf size={16} /> 奶类供应</h2>
+          {['牛奶', '燕麦奶'].map((name) => (
+            <div className="admin-setting-row" key={name}>
+              <div><strong>{name}</strong><p>{menu.ingredients[name] ? '今天还有' : '今天用完了'}</p></div>
+              <Toggle label={`${name}供应`} value={!!menu.ingredients[name]} onChange={(value) => void toggleIngredient(name, value)} />
+            </div>
+          ))}
+        </section> : null}
+      </> : null}
       {editor ? (
         <section className="admin-editor" ref={editorRef}>
           <div className="admin-editor-heading">
@@ -651,13 +657,20 @@ function Manage() {
           </form>
         </section>
       ) : null}
-      <p className="admin-legal-note">更新供应后，朋友端会同步。已经下单的搭配和豆子名称会原样保留。</p>
-      {pendingLeave ? (
+      {navGuard.pending ? (
+        <Sheet title="放弃未保存的修改？" onClose={navGuard.stay}>
+          <p className="admin-sheet-copy">当前编辑内容还没有保存，离开后会丢失。</p>
+          <div className="admin-sheet-actions">
+            <button type="button" className="text-action" onClick={navGuard.stay}>继续编辑</button>
+            <button type="button" className="admin-danger-action" onClick={navGuard.leave}>放弃修改</button>
+          </div>
+        </Sheet>
+      ) : pendingLeave ? (
         <Sheet title="放弃未保存的修改？" onClose={() => setPendingLeave(false)}>
           <p className="admin-sheet-copy">当前编辑内容还没有保存，离开后会丢失。</p>
           <div className="admin-sheet-actions">
             <button type="button" className="text-action" onClick={() => setPendingLeave(false)}>继续编辑</button>
-            <button type="button" className="admin-danger-action" onClick={() => { const nextTab = pendingTab; setPendingLeave(false); setPendingTab(null); setEditor(null); if (nextTab) setTab(nextTab); }}>放弃修改</button>
+            <button type="button" className="admin-danger-action" onClick={() => { const nextTab = pendingTab; const nextEditor = pendingEditor; setPendingLeave(false); setPendingTab(null); setPendingEditor(null); if (nextEditor) openEditor(nextEditor.kind, nextEditor.data); else setEditor(null); if (nextTab) setTab(nextTab); }}>放弃修改</button>
           </div>
         </Sheet>
       ) : null}
@@ -732,6 +745,8 @@ function ProductEditor({
 }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [extraText, setExtraText] = useState(data.extraOptions.join('、'));
+  useEffect(() => setExtraText(data.extraOptions.join('、')), [data.id]);
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.currentTarget.value = '';
@@ -753,6 +768,7 @@ function ProductEditor({
   };
   const beanNames = data.beans.map((id) => menu.beans.find((bean) => bean.id === id)?.name).filter(Boolean) as string[];
   const setBeans = (names: string[]) => onChange({ beans: menu.beans.filter((bean) => names.includes(bean.name)).map((bean) => bean.id) });
+  const commitExtraOptions = () => onChange({ extraOptions: extraText.split('、').map((value) => value.trim()).filter(Boolean) });
   return (
     <>
       <Field label="英文副标题（选填）" value={data.english} onChange={(event) => onChange({ english: event.target.value })} />
@@ -765,7 +781,7 @@ function ProductEditor({
       <Choices label="配方允许的奶类" options={['牛奶', '燕麦奶']} value={data.milks} onChange={(value) => onChange({ milks: value })} multiple />
       <Choices label="可选拉花（热饮＋牛奶时展示）" options={['不指定', '爱心', '树叶', '郁金香']} value={data.arts} onChange={(value) => onChange({ arts: value })} multiple />
       <Field label="额外配方选项名称（选填）" value={data.extraLabel} error={errors.extraLabel} placeholder="例如 甜度、冰量" onChange={(event) => onChange({ extraLabel: event.target.value })} />
-      <Field label="额外配方选项（以顿号分隔）" value={data.extraOptions.join('、')} error={errors.extraOptions} placeholder="不额外加糖、微甜" onChange={(event) => onChange({ extraOptions: event.target.value.split('、').map((value) => value.trim()).filter(Boolean) })} />
+      <Field name="extraOptions" label="额外配方选项（以顿号分隔）" value={extraText} error={errors.extraOptions} placeholder="不额外加糖、微甜" onChange={(event) => setExtraText(event.target.value)} onBlur={commitExtraOptions} />
       <Toggle label="饮品供应中" value={data.available} onChange={(value) => onChange({ available: value })} />
     </>
   );
@@ -794,35 +810,41 @@ function BeanEditor({ data, errors, onChange }: { data: Bean; errors: Errors; on
 async function compressImage(file: File): Promise<Blob> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('仅支持 JPEG、PNG 或 WebP 图片。');
   const source = await createImageBitmap(file);
-  let width = source.width;
-  let height = source.height;
-  const max = 1280;
-  if (Math.max(width, height) > max) {
-    const ratio = max / Math.max(width, height);
-    width = Math.round(width * ratio);
-    height = Math.round(height * ratio);
-  }
-  for (let attempt = 0; attempt < 7; attempt += 1) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('浏览器暂不支持图片处理。');
-    context.drawImage(source, 0, 0, width, height);
-    const quality = [0.84, 0.72, 0.6, 0.48][Math.min(attempt, 3)];
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
-    if (blob && blob.size <= 256 * 1024) return blob;
-    width = Math.max(320, Math.round(width * 0.82));
-    height = Math.max(320, Math.round(height * 0.82));
+  try {
+    let width = source.width;
+    let height = source.height;
+    const max = 1280;
+    if (Math.max(width, height) > max) {
+      const ratio = max / Math.max(width, height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('浏览器暂不支持图片处理。');
+      context.drawImage(source, 0, 0, width, height);
+      const quality = [0.84, 0.72, 0.6, 0.48][Math.min(attempt, 3)];
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+      if (blob && blob.size <= 256 * 1024) return blob;
+      width = Math.max(320, Math.round(width * 0.82));
+      height = Math.max(320, Math.round(height * 0.82));
+    }
+  } finally {
+    source.close();
   }
   throw new Error('图片压缩后仍超过 256 KiB，请换一张图片。');
 }
 
 function Settings() {
-  const { menu, reloadMenu, notify } = useApp();
+  const { menu, reloadMenu, notify, refresh, navigate } = useApp();
   const statsRemote = useRemote<OwnerStats>('/api/owner/stats');
   const [shopDraft, setShopDraft] = useState<Shop | null>(null);
   const [shopDirty, setShopDirty] = useState(false);
+  const [shopError, setShopError] = useState('');
+  const [shopFields, setShopFields] = useState<Errors>({});
   const [savingShop, setSavingShop] = useState(false);
   const [openBusy, setOpenBusy] = useState(false);
   const [query, setQuery] = useState('');
@@ -833,7 +855,14 @@ function Settings() {
   const searchSeq = useRef(0);
   const [editingUser, setEditingUser] = useState<number | null>(null);
   const [nameDraft, setNameDraft] = useState('');
+  const [originalName, setOriginalName] = useState('');
+  const [nameError, setNameError] = useState('');
   const [savingUser, setSavingUser] = useState(false);
+  const [pendingUserCancel, setPendingUserCancel] = useState(false);
+  const [pendingLogout, setPendingLogout] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const settingsDirty = shopDirty || (editingUser !== null && nameDraft !== originalName);
+  const navGuard = useNavigationGuard(settingsDirty);
 
   useEffect(() => {
     if (!menu || shopDirty) return;
@@ -860,18 +889,49 @@ function Settings() {
     return () => window.clearTimeout(timer);
   }, [composing, query]);
 
+  useEffect(() => {
+    if (!pendingLogout || settingsDirty) return;
+    setPendingLogout(false);
+    void (async () => {
+      if (logoutBusy) return;
+      setLogoutBusy(true);
+      try {
+        await api('/api/owner/logout', json({}));
+        await refresh();
+        navigate('/owner/login');
+      } catch (error) {
+        notify(errorText(error));
+      } finally {
+        setLogoutBusy(false);
+      }
+    })();
+  }, [navigate, notify, pendingLogout, refresh, settingsDirty, logoutBusy]);
+
   if (!menu || !shopDraft) return <Loading />;
 
   const saveShop = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (savingShop) return;
+    const fields: Errors = {};
+    if (!shopDraft.name.trim()) fields.name = '请填写小店名称。';
+    if (Object.keys(fields).length) {
+      setShopFields(fields);
+      setShopError('请先修正标红字段。');
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     setSavingShop(true);
+    setShopError('');
+    setShopFields({});
     try {
       await api('/api/owner/shop', json({ name: shopDraft.name, message: shopDraft.message, recommendedId: shopDraft.recommendedId }, 'PATCH'));
       setShopDirty(false);
       await reloadMenu();
       notify('小店内容已保存。');
     } catch (error) {
-      notify(errorText(error));
+      setShopError(errorText(error));
+      setShopFields(errorFields(error));
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
     } finally {
       setSavingShop(false);
     }
@@ -891,15 +951,23 @@ function Settings() {
   };
 
   const saveUser = async (user: User) => {
-    if (!nameDraft.trim()) return;
+    if (savingUser) return;
+    if (!nameDraft.trim()) {
+      setNameError('请填写昵称。');
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     setSavingUser(true);
+    setNameError('');
     try {
       await api(`/api/owner/users/${user.id}`, json({ name: nameDraft.trim() }, 'PATCH'));
       setEditingUser(null);
+      setOriginalName(nameDraft.trim());
       setQuery(nameDraft.trim());
       notify('昵称已更新。');
     } catch (error) {
-      notify(errorText(error));
+      setNameError(errorFields(error).name || errorText(error));
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
     } finally {
       setSavingUser(false);
     }
@@ -907,25 +975,26 @@ function Settings() {
 
   return (
     <OwnerLayout active="settings" title="小店设置">
-      <div className="admin-page-heading"><div><h1>小店设置</h1><p>让朋友知道今天的小店状态。</p></div></div>
+      <div className="admin-page-heading"><div><h1>小店设置</h1></div></div>
       <section className="admin-settings-section">
         <div className="admin-setting-row admin-open-row"><div><strong>{menu.shop.open ? '接单中' : '暂停接单'}</strong><p>{menu.shop.open ? '朋友可以点单' : '已有订单继续制作'}</p></div><Toggle label="小店接单状态" value={menu.shop.open} onChange={(value) => void toggleOpen(value)} disabled={openBusy} /></div>
       </section>
       <section className="admin-settings-section">
         <h2 className="admin-section-title">小店内容</h2>
         <form noValidate onSubmit={(event) => void saveShop(event)}>
-          <Field label="小店名称" value={shopDraft.name} onChange={(event) => { setShopDirty(true); setShopDraft((current) => current ? { ...current, name: event.target.value } : current); }} />
-          <MemoField label="今日留言" value={shopDraft.message} onChange={(value) => { setShopDirty(true); setShopDraft((current) => current ? { ...current, message: value } : current); }} maxLength={200} />
-          <label className="field"><span>今日推荐</span><select value={shopDraft.recommendedId} onChange={(event) => { setShopDirty(true); setShopDraft((current) => current ? { ...current, recommendedId: event.target.value } : current); }}><option value="">暂不推荐</option>{menu.products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          {shopError ? <ErrorMessage message={shopError} /> : null}
+          <Field label="小店名称" value={shopDraft.name} error={shopFields.name} onChange={(event) => { setShopDirty(true); setShopError(''); setShopDraft((current) => current ? { ...current, name: event.target.value } : current); }} />
+          <MemoField label="今日留言" value={shopDraft.message} onChange={(value) => { setShopDirty(true); setShopError(''); setShopDraft((current) => current ? { ...current, message: value } : current); }} maxLength={200} />
+          <label className="field"><span>今日推荐</span><select value={shopDraft.recommendedId} onChange={(event) => { setShopDirty(true); setShopError(''); setShopDraft((current) => current ? { ...current, recommendedId: event.target.value } : current); }}><option value="">暂不推荐</option>{menu.products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
           <Button busy={savingShop} type="submit">保存设置</Button>
         </form>
       </section>
       <section className="admin-settings-section">
         <h2 className="admin-section-title">朋友账号</h2>
-        <div className="admin-search-field"><Search size={18} /><input aria-label="查找朋友" placeholder="输入数字 ID 或昵称" value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => { searchSeq.current += 1; setComposing(true); }} onCompositionEnd={(event) => { setComposing(false); setQuery(event.currentTarget.value); }} /><button type="button" aria-label="清除查找" className={query ? 'visible' : ''} onClick={() => { searchSeq.current += 1; setQuery(''); setUsers([]); }}><X size={17} /></button></div>
+        <div className="admin-search-field"><Search size={18} /><input aria-label="查找朋友" placeholder="输入数字 ID 或昵称" value={query} onChange={(event) => setQuery(event.target.value)} onCompositionStart={() => { searchSeq.current += 1; setComposing(true); }} onCompositionEnd={(event) => { setComposing(false); setQuery(event.currentTarget.value); }} /><button type="button" tabIndex={query ? 0 : -1} aria-hidden={!query} aria-label="清除查找" className={query ? 'visible' : ''} onClick={() => { searchSeq.current += 1; setQuery(''); setUsers([]); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.admin-search-field input')?.focus()); }}><X size={17} /></button></div>
         {searching ? <p className="admin-search-state">正在查找…</p> : null}
         {searchError ? <ErrorMessage message={searchError} /> : null}
-        {users.map((user) => <div className="admin-user-result" key={user.id}>{editingUser === user.id ? <div className="admin-user-edit"><Field label="昵称" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} autoFocus /><div><button type="button" className="text-action" onClick={() => setEditingUser(null)}>取消</button><button type="button" className="text-action" disabled={savingUser} onClick={() => void saveUser(user)}>保存</button></div></div> : <><span>{user.name} <small className="mono">NO. {String(user.id).padStart(3, '0')}</small></span><button type="button" className="text-action" onClick={() => { setEditingUser(user.id); setNameDraft(user.name); }}>修改昵称</button></>}</div>)}
+        {users.map((user) => <div className="admin-user-result" key={user.id}>{editingUser === user.id ? <div className="admin-user-edit"><Field label="昵称" value={nameDraft} error={nameError} onChange={(event) => { setNameDraft(event.target.value); setNameError(''); }} autoFocus /><div><button type="button" className="text-action" onClick={() => { if (nameDraft !== originalName) setPendingUserCancel(true); else setEditingUser(null); }}>取消</button><button type="button" className="text-action" disabled={savingUser} onClick={() => void saveUser(user)}>保存</button></div></div> : <><span>{user.name} <small className="mono">NO. {String(user.id).padStart(3, '0')}</small></span><button type="button" className="text-action" onClick={() => { setEditingUser(user.id); setNameDraft(user.name); setOriginalName(user.name); setNameError(''); }}>修改昵称</button></>}</div>)}
         {!searching && query && !users.length && !searchError ? <p className="admin-search-state">没有找到匹配的朋友。</p> : null}
       </section>
       <section className="admin-settings-section">
@@ -933,6 +1002,25 @@ function Settings() {
         {statsRemote.error ? <ErrorMessage message={statsRemote.error} onRetry={() => void statsRemote.reload()} /> : null}
         {statsRemote.data ? <><div className="admin-metrics"><div><strong>{statsRemote.data.completed}</strong><small>已完成</small></div><div><strong>{statsRemote.data.visitors}</strong><small>来访朋友</small></div><div><strong>{statsRemote.data.average == null ? '—' : statsRemote.data.average.toFixed(1)}</strong><small>平均评价</small></div></div><div className="admin-reviews">{statsRemote.data.reviews.length ? statsRemote.data.reviews.map((review) => <article key={review.orderId}><div><span>{review.username} · {review.productName}</span><span className="admin-review-stars">{'★'.repeat(review.stars)}</span></div>{review.text ? <p>{review.text}</p> : null}<small>{timeText(review.updatedAt)}</small></article>) : <p className="admin-search-state">还没有评价。</p>}</div></> : statsRemote.loading ? <Loading /> : null}
       </section>
+      <div className="admin-settings-footer"><button type="button" className="admin-logout-link" disabled={logoutBusy} onClick={() => { setPendingLogout(true); if (!settingsDirty) setShopDirty(false); }}><LogOut size={15} /> 退出店主账号</button></div>
+      {navGuard.pending ? (
+        <Sheet title="放弃未保存的修改？" onClose={navGuard.stay}>
+          <p className="admin-sheet-copy">当前编辑内容还没有保存，离开后会丢失。</p>
+          <div className="admin-sheet-actions"><button type="button" className="text-action" onClick={navGuard.stay}>继续编辑</button><button type="button" className="admin-danger-action" onClick={navGuard.leave}>放弃修改</button></div>
+        </Sheet>
+      ) : null}
+      {pendingUserCancel ? (
+        <Sheet title="放弃未保存的昵称？" onClose={() => setPendingUserCancel(false)}>
+          <p className="admin-sheet-copy">当前昵称修改还没有保存，离开编辑后会丢失。</p>
+          <div className="admin-sheet-actions"><button type="button" className="text-action" onClick={() => setPendingUserCancel(false)}>继续编辑</button><button type="button" className="admin-danger-action" onClick={() => { setPendingUserCancel(false); setEditingUser(null); setNameDraft(''); setNameError(''); }}>放弃修改</button></div>
+        </Sheet>
+      ) : null}
+      {pendingLogout && settingsDirty ? (
+        <Sheet title="放弃未保存的修改？" onClose={() => setPendingLogout(false)}>
+          <p className="admin-sheet-copy">退出店主账号前，当前修改需要先放弃。</p>
+          <div className="admin-sheet-actions"><button type="button" className="text-action" onClick={() => setPendingLogout(false)}>继续编辑</button><button type="button" className="admin-danger-action" onClick={() => { setShopDirty(false); setEditingUser(null); setNameDraft(originalName); }}>退出并放弃</button></div>
+        </Sheet>
+      ) : null}
     </OwnerLayout>
   );
 }
