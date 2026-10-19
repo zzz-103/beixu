@@ -1,0 +1,38 @@
+{
+  "name": "beixu-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node tests/browser.mjs",
+    "db:migrate": "wrangler d1 migrations apply beixu-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply beixu-db --remote",
+    "db:demo": "wrangler d1 execute beixu-db --local --file scripts/demo.sql",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:dry": "npm run build && wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "hono": "^4.10.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "latest",
+    "@cloudflare/workers-types": "latest",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "^5.9.0",
+    "wrangler": "latest",
+    "vitest": "latest",
+    "@cloudflare/vitest-pool-workers": "latest",
+    "playwright": "latest"
+  }
+}

@@ -1,0 +1,39 @@
+/* Canonical runtime tokens; documented by project-root design.md. */
+:root {
+  --bg: #f7f4ee;
+  --ink: #302a25;
+  --primary: #70513d;
+  --apricot: #eab28b;
+  --border: #e4ded4;
+  --white: #ffffff;
+  --surface: #fffefb;
+  --surface-soft: #faf8f3;
+  --muted: #73675c;
+  --placeholder: #918579;
+  --primary-tint: #eee6dc;
+  --apricot-tint: #f1ece4;
+  --subtle: #f0ebe4;
+  --border-strong: #bfb1a3;
+  --danger: #a54534;
+  --danger-tint: #f7eae4;
+  --success-ink: #70513d;
+  --success-tint: #f0ebe4;
+  --note-ink: #70513d;
+  --on-primary-muted: #ebe0d7;
+  --on-primary-border: #a9907c;
+  --workspace: #eee8df;
+  --scroll-thumb: #bfb1a3;
+  --scroll-track: #f7f4ee;
+  --shadow-soft: #302a250a;
+  --shadow-control: #302a251a;
+  --shadow-toast: #302a2514;
+  --shadow-sheet: #302a2512;
+  --scrim: #302a2570;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --font-body:
+    "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-display: "Songti SC", "STSong", Georgia, serif;
+  --font-mono: "SFMono-Regular", Consolas, monospace;
+}

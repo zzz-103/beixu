@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local development. Configure production via wrangler secret put OWNER_PASSPHRASE
+OWNER_PASSPHRASE=change-this-local-passphrase
