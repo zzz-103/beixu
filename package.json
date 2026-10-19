@@ -14,25 +14,31 @@
     "db:migrate:remote": "wrangler d1 migrations apply beixu-db --remote",
     "db:demo": "wrangler d1 execute beixu-db --local --file scripts/demo.sql",
     "deploy": "npm run build && wrangler deploy",
-    "deploy:dry": "npm run build && wrangler deploy --dry-run"
+    "deploy:dry": "npm run build && wrangler deploy --dry-run",
+    "format": "prettier --write src tests migrations *.md *.json *.ts",
+    "format:check": "prettier --check src tests migrations *.md *.json *.ts"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "hono": "^4.10.0",
-    "lucide-react": "^0.468.0"
+    "hono": "4.13.13",
+    "lucide-react": "0.468.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "latest",
-    "@cloudflare/workers-types": "latest",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "^5.9.0",
-    "wrangler": "latest",
-    "vitest": "latest",
-    "@cloudflare/vitest-pool-workers": "latest",
-    "playwright": "latest"
+    "@cloudflare/vite-plugin": "1.64.0",
+    "@cloudflare/vitest-plugin": "1.4.5",
+    "@cloudflare/workers-types": "5.20261019.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "4.1.11",
+    "wrangler": "4.151.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
