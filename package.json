@@ -8,15 +8,15 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && node --test tests/backup.test.mjs",
     "test:e2e": "node tests/browser.mjs",
     "db:migrate": "wrangler d1 migrations apply beixu-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply beixu-db --remote",
     "db:demo": "wrangler d1 execute beixu-db --local --file scripts/demo.sql",
     "deploy": "npm run build && wrangler deploy",
     "deploy:dry": "npm run build && wrangler deploy --dry-run",
-    "format": "prettier --write src tests migrations *.md *.json *.ts",
-    "format:check": "prettier --check src tests migrations *.md *.json *.ts"
+    "format": "prettier --write src tests scripts migrations *.md *.json *.jsonc *.ts",
+    "format:check": "prettier --check src tests scripts migrations *.md *.json *.jsonc *.ts"
   },
   "dependencies": {
     "hono": "4.13.13",

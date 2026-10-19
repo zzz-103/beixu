@@ -67,6 +67,8 @@ const noOverflow = async (p) =>
 let originalMenu;
 try {
   await page.goto('/login');
+  assert.match(await page.title(), /朋友登录.*杯序/);
+  assert.equal(await page.locator('vite-error-overlay').count(), 0);
   await see(page.getByRole('heading', { name: '来啦，坐一会儿。' }));
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await see(page.locator('[aria-invalid="true"]'));
@@ -166,6 +168,7 @@ try {
   await page.getByRole('button', { name: '收藏这个搭配', exact: true }).click();
   await shot(page, '06-review');
   await page.getByRole('button', { name: '提交评价', exact: true }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await see(page.getByText('奶香刚刚好，下次还想喝。', { exact: true }));
   const profile = (await call(friend, '/api/profile')).data;
   assert.equal(profile.stats.count, 1);
@@ -228,12 +231,115 @@ try {
   await call(owner, '/api/owner/shop', 'PATCH', { open: true });
   done('暂停接单在服务端阻止提交');
 
+  // Exercise actual authoring controls, including binary upload and unsaved navigation.
+  await admin.goto('/owner/manage');
+  await see(admin.getByRole('button', { name: '新增', exact: true }));
+  await admin.getByRole('button', { name: '新增', exact: true }).click();
+  await admin.getByLabel('名称', { exact: true }).fill('验证饮品' + Date.now().toString(36));
+  await admin.getByLabel('一句口感介绍').fill('一杯轻巧的测试饮品。');
+  const photoBuffer = await page.screenshot({ clip: { x: 0, y: 0, width: 64, height: 64 } });
+  const mediaResponse = admin.waitForResponse(
+    (r) => r.url().endsWith('/api/owner/media') && r.request().method() === 'POST',
+  );
+  await admin
+    .locator('input[type=file]')
+    .setInputFiles({ name: 'coffee.png', mimeType: 'image/png', buffer: photoBuffer });
+  const media = await mediaResponse;
+  assert.equal(media.status(), 201);
+  const mediaURL = (await media.json()).url;
+  const uploaded = await other.request.get(mediaURL);
+  assert.equal(uploaded.status(), 200);
+  assert.match(uploaded.headers()['content-type'], /^image\/(webp|png|jpeg)/);
+  assert.match(uploaded.headers()['cache-control'], /immutable/);
+  const createdDrinkResponse = admin.waitForResponse(
+    (r) => r.url().endsWith('/api/owner/products') && r.request().method() === 'POST',
+  );
+  await admin.getByRole('button', { name: '保存修改', exact: true }).click();
+  const createdDrink = await createdDrinkResponse;
+  assert.equal(createdDrink.status(), 201);
+  const createdProduct = (await createdDrink.json()).product;
+  assert.equal(createdProduct.photo, mediaURL);
+  await see(admin.getByRole('switch', { name: createdProduct.name + '供应', exact: true }));
+  done('饮品表单新增、浏览器压缩上传和D1图片完整读取');
+  await admin
+    .locator('.admin-management-row')
+    .filter({ hasText: createdProduct.name })
+    .getByRole('button')
+    .first()
+    .click();
+  await admin.getByLabel('名称', { exact: true }).fill(createdProduct.name + '未保存');
+  await admin.getByRole('link', { name: '小店设置', exact: true }).click();
+  await see(admin.getByRole('dialog', { name: '放弃未保存的修改？' }));
+  await admin.getByRole('button', { name: '继续编辑', exact: true }).click();
+  assert.equal(
+    await admin.getByLabel('名称', { exact: true }).inputValue(),
+    createdProduct.name + '未保存',
+  );
+  await admin.getByRole('link', { name: '小店设置', exact: true }).click();
+  await admin.getByRole('dialog').getByRole('button', { name: '放弃修改', exact: true }).click();
+  await see(admin.getByRole('heading', { name: '小店设置', exact: true }));
+  done('管理表单离开确认、继续编辑保留值和明确放弃');
+  // Hide the test product so the original menu remains visually comparable.
+  await call(owner, `/api/owner/products/${createdProduct.id}`, 'PUT', {
+    ...createdProduct,
+    available: false,
+  });
+  await admin.goto('/owner/manage');
+  await admin.getByRole('button', { name: '分类', exact: true }).click();
+  await admin.getByRole('button', { name: '新增', exact: true }).click();
+  const categoryName = '验证分类' + Date.now().toString(36);
+  await admin.getByLabel('名称', { exact: true }).fill(categoryName);
+  const catResponse = admin.waitForResponse(
+    (r) => r.url().endsWith('/api/owner/categories') && r.request().method() === 'POST',
+  );
+  await admin.getByRole('button', { name: '保存修改', exact: true }).click();
+  const catCreated = await catResponse;
+  assert.equal(catCreated.status(), 201);
+  const category = (await catCreated.json()).category;
+  await see(admin.getByRole('button', { name: '上移' + categoryName, exact: true }));
+  const reorder = admin.waitForResponse((r) => r.url().endsWith('/api/owner/categories/order'));
+  await admin.getByRole('button', { name: '上移' + categoryName, exact: true }).click();
+  assert.equal((await reorder).status(), 200);
+  await call(owner, `/api/owner/categories/${category.id}`, 'PUT', { ...category, enabled: false });
+  done('分类新增和可访问排序');
+  // Cancelled orders also remain in history; paging must append the actual second page.
+  for (let n = 0; n < 20; n++) {
+    const created = await call(friend, '/api/orders', 'POST', payload, {
+      'Idempotency-Key': crypto.randomUUID(),
+    });
+    assert.equal(created.status, 201);
+    await call(friend, `/api/orders/${created.data.order.id}/cancel`, 'POST', {});
+  }
+  await page.goto('/orders');
+  await page.getByRole('button', { name: '喝过的', exact: true }).click();
+  await see(page.getByRole('button', { name: '加载更多', exact: true }));
+  assert.equal(await page.locator('.order-card').count(), 20);
+  await page.getByRole('button', { name: '加载更多', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.order-card').length > 20);
+  const historyCount = await page.locator('.order-card').count();
+  assert(historyCount >= 21);
+  assert.equal(
+    new Set(
+      await page
+        .locator('.order-card')
+        .evaluateAll((cards) => cards.map((card) => card.getAttribute('data-order-id'))),
+    ).size,
+    historyCount,
+  );
+  done('真实历史分页追加且不重复第一页');
+
   for (const width of [360, 405, 430, 1280]) {
     await page.setViewportSize({ width, height: width === 1280 ? 900 : 720 });
     for (const route of ['/menu', '/customize/latte', '/orders', '/profile']) {
       await page.goto(route);
       await see(page.locator('.bottom-nav,.sticky-action').first());
       await noOverflow(page);
+    }
+    await admin.setViewportSize({ width, height: width === 1280 ? 900 : 720 });
+    for (const route of ['/owner/board', '/owner/manage', '/owner/settings']) {
+      await admin.goto(route);
+      await see(admin.locator('.bottom-nav'));
+      await noOverflow(admin);
     }
     await shot(page, `responsive-${width}`);
   }

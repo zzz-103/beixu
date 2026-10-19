@@ -67,10 +67,11 @@ SQL备份包含账号、订单、评价、会话及图片，属于私人数据�
 
 ```sh
 npx wrangler d1 create beixu-restore
-npx wrangler d1 execute beixu-restore --remote --file ./beixu-backup.sql
+node scripts/prepare-backup.mjs ./beixu-backup.sql ./beixu-backup-ready.sql
+npx wrangler d1 execute beixu-restore --remote --file ./beixu-backup-ready.sql
 ```
 
-验证后将项目数据库名称与ID指向恢复库并重新构建部署。不要在当前生产库重复导入整份备份。Cloudflare D1控制台的Time Travel也可用于平台保留期内恢复，操作前核对回退时间与影响。
+转换脚本将较大图片的十六进制 SQL 拆为小于 100 KB 的语句，保留完整字节，避免触及 D1 单条 SQL 长度限制。原始备份不会被覆盖。验证后将项目数据库名称与ID指向恢复库并重新构建部署。不要在当前生产库重复导入整份备份。Cloudflare D1控制台的Time Travel也可用于平台保留期内恢复，操作前核对回退时间与影响。
 
 ## 7. 排查
 
@@ -84,3 +85,5 @@ npx wrangler d1 execute beixu-restore --remote --file ./beixu-backup.sql
 ## 8. 搬迁项目
 
 整个文件夹可复制到新位置。不需要携带 `node_modules/`、`dist/` 或 `.git/`；在新位置运行 `npm ci`。本地数据库如需迁移，另行保留 `.wrangler/`；生产D1不在你的电脑中。另行安全保存本地 `.dev.vars` 和必要备份。
+
+备份格式与导入限制参阅 [Cloudflare 官方导入导出文档](https://developers.cloudflare.com/d1/best-practices/import-export-data/)。

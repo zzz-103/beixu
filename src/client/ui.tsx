@@ -60,7 +60,17 @@ export function Top({ title, back = '/menu' }: { title: string; back?: string })
       <Link to={back} className="back" aria-label="返回">
         <ArrowLeft />
       </Link>
-      <span>{title}</span>
+      {![
+        '我的订单',
+        '我的熟客卡',
+        '店主制作台',
+        '制作台',
+        '菜单与豆单',
+        '小店设置',
+        '编辑饮品',
+      ].includes(title) ? (
+        <span>{title}</span>
+      ) : null}
       <Link to="/menu" className="brand">
         {menu?.shop.name || '杯序'}
       </Link>

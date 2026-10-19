@@ -317,3 +317,46 @@ select:focus-visible {
   resize: none;
   min-height: 76px;
 }
+
+/* Live content can be longer than the prototype's sample names. */
+.welcome {
+  height: auto;
+  min-height: 56px;
+}
+.welcome h1 {
+  overflow-wrap: anywhere;
+}
+.welcome-copy {
+  width: 100%;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+.bean-option > button.bean-option {
+  flex: 1;
+  text-align: left;
+}
+.bean-option > button.bean-option > span:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.bean-option .caption {
+  display: block;
+}
+.bean-option > button:disabled {
+  opacity: 0.5;
+}
+.custom-content > .option-group > .choice-label {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.review-link {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
+  margin-bottom: 8px;
+}
