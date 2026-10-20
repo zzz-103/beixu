@@ -53,6 +53,17 @@ export function TextButton({
     </button>
   );
 }
+export function BrandLogo({ full = false, name = '杯叙' }: { full?: boolean; name?: string }) {
+  return (
+    <span
+      className={`brand-logo ${full ? 'brand-logo-full' : 'brand-logo-compact'}`}
+      role="img"
+      aria-label={`${name}标志`}
+    >
+      <img src="/assets/brand-logo.png" width={1254} height={1254} alt="" />
+    </span>
+  );
+}
 export function Top({ title, back = '/menu' }: { title: string; back?: string }) {
   const { menu } = useApp();
   return (
@@ -71,8 +82,9 @@ export function Top({ title, back = '/menu' }: { title: string; back?: string })
       ].includes(title) ? (
         <span>{title}</span>
       ) : null}
-      <Link to="/menu" className="brand">
-        {menu?.shop.name || '杯序'}
+      <Link to="/menu" className="brand brand-lockup">
+        <BrandLogo name={menu?.shop.name} />
+        {menu?.shop.name || '杯叙'}
       </Link>
     </header>
   );
@@ -274,10 +286,12 @@ export function Tabs({
 }
 export function Sheet({
   title,
+  className = '',
   onClose,
   children,
 }: {
   title: string;
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -303,7 +317,7 @@ export function Sheet({
     };
   }, []);
   return (
-    <dialog ref={ref} className="sheet" aria-labelledby={id}>
+    <dialog ref={ref} className={`sheet ${className}`} aria-labelledby={id}>
       <div className="sheet-handle" />
       <header className="sheet-header">
         <h2 id={id}>{title}</h2>

@@ -39,3 +39,5 @@
 | GET /media/:id                   |                                                  | 图片二进制，公开immutable缓存，不允许SVG                               |
 
 共享类型在 src/shared/types.ts；校验和选配恢复在 src/shared/domain.ts。生产默认无用户订单。无密码登录是产品确认的账号选择方式，不能提供用户间身份验证。
+
+豆单：`scales` 为五个 0–5 整数，依次对应酸度、甜度、苦味、醇厚、余韵。`process`、`altitude`、`series`、`category` 为资料文本，`recommended` 为推荐饮品数组，`predicted` 表示口感是否为预测。保存时一并提交；缺省资料字段为空。

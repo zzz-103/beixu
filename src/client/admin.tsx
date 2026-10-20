@@ -1,3 +1,4 @@
+import { beanScaleLabels } from '../shared/types';
 import {
   useEffect,
   useMemo,
@@ -494,7 +495,7 @@ function blankBean(): Bean {
     variety: '',
     roast: '中烘焙',
     tags: [],
-    scales: [2, 3, 3],
+    scales: [2, 3, 3, 3, 3],
     front: '',
     body: '',
     finish: '',
@@ -1214,57 +1215,55 @@ function BeanEditor({
           });
         }}
       />
+      {(['process', 'altitude', 'series', 'category'] as const).map((key, index) => (
+        <Field
+          key={key}
+          label={['处理法', '海拔', '豆子系列', '风味分类'][index]}
+          value={data[key] || ''}
+          onChange={(event) => onChange({ [key]: event.target.value })}
+        />
+      ))}
+      <Field
+        label="推荐饮品（以顿号分隔）"
+        value={(data.recommended || []).join('、')}
+        onChange={(event) =>
+          onChange({
+            recommended: event.target.value
+              .split('、')
+              .map((value) => value.trim())
+              .filter(Boolean),
+          })
+        }
+      />
       <div className="admin-scale-grid">
-        <label>
-          酸度
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={data.scales[0] || 1}
-            onChange={(event) =>
-              onChange({
-                scales: [Number(event.target.value), data.scales[1] || 1, data.scales[2] || 1],
-              })
-            }
-          />
-        </label>
-        <label>
-          苦度
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={data.scales[1] || 1}
-            onChange={(event) =>
-              onChange({
-                scales: [data.scales[0] || 1, Number(event.target.value), data.scales[2] || 1],
-              })
-            }
-          />
-        </label>
-        <label>
-          醇厚
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={data.scales[2] || 1}
-            onChange={(event) =>
-              onChange({
-                scales: [data.scales[0] || 1, data.scales[1] || 1, Number(event.target.value)],
-              })
-            }
-          />
-        </label>
+        {beanScaleLabels.map((label, index) => (
+          <label key={label}>
+            {label}
+            <input
+              type="number"
+              min={0}
+              max={5}
+              step={1}
+              value={data.scales[index] ?? 0}
+              onChange={(event) =>
+                onChange({
+                  scales: data.scales.map((value, i) =>
+                    i === index ? Number(event.target.value) : value,
+                  ),
+                })
+              }
+            />
+          </label>
+        ))}
       </div>
+      {errors.scales ? <span className="error">{errors.scales}</span> : null}
       <Field
         label="前段风味"
         value={data.front}
         onChange={(event) => onChange({ front: event.target.value })}
       />
       <Field
-        label="中段风味"
+        label="风味特点"
         value={data.body}
         onChange={(event) => onChange({ body: event.target.value })}
       />

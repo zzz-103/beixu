@@ -1,7 +1,12 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { app, type Env } from '../src/worker/index';
-import migrationSql from '../migrations/0001_init.sql?raw';
+import initialSql from '../migrations/0001_init.sql?raw';
+import realBeansSql from '../migrations/0002_real_beans.sql?raw';
+import descriptionsSql from '../migrations/0003_bean_descriptions.sql?raw';
+import brandNameSql from '../migrations/0004_brand_name.sql?raw';
+const migrationSql =
+  initialSql + '\n' + realBeansSql + '\n' + descriptionsSql + '\n' + brandNameSql;
 
 const workerEnv = { DB: env.DB, OWNER_PASSPHRASE: 'test-owner-passphrase' } as Env;
 const call = (path: string, init: RequestInit = {}) =>
@@ -34,7 +39,7 @@ async function resetDatabase() {
     'shop',
   ];
   for (const table of tables) await env.DB.prepare(`DROP TABLE IF EXISTS ${table}`).run();
-  for (const statement of migrationSql.split(';')) {
+  for (const statement of migrationSql.replace(/^--.*$/gm, '').split(';')) {
     const sql = statement.trim();
     if (sql && !sql.startsWith('--') && !/^PRAGMA\b/i.test(sql)) await env.DB.prepare(sql).run();
   }
@@ -42,6 +47,59 @@ async function resetDatabase() {
 
 describe('真实 workerd + D1 后端契约', () => {
   beforeEach(resetDatabase);
+  it('真实豆单包含完整资料，五项评分及预测标记可保存，拒绝旧三项评分', async () => {
+    type Menu = import('../src/shared/types').MenuData;
+    const menu = await read<Menu>(await call('/api/menu'));
+    expect(menu.shop.name).toBe('杯叙');
+    expect(menu.beans).toHaveLength(8);
+    expect(menu.beans.every((bean) => !/预测|预计|可能/.test(bean.body))).toBe(true);
+    expect(menu.beans.every((bean) => bean.available && bean.scales.length === 5)).toBe(true);
+    const expectedScales: Record<string, number[]> = {
+      blend: [1, 2, 3, 5, 3],
+      'sam-blend': [2, 4, 3, 4, 2],
+      blue: [2, 4, 2, 4, 4],
+      afu: [4, 5, 1, 3, 5],
+      'peru-sl09': [3, 4, 1, 3, 4],
+      'panama-geisha': [4, 4, 1, 2, 5],
+      geisha: [4, 4, 1, 3, 5],
+      'colombia-geisha': [4, 4, 1, 3, 4],
+    };
+    for (const bean of menu.beans) expect(bean.scales).toEqual(expectedScales[bean.id]);
+    expect(menu.beans.filter((bean) => bean.predicted)).toHaveLength(5);
+    expect(menu.beans.find((bean) => bean.id === 'peru-sl09')).toMatchObject({
+      variety: 'SL-09',
+      series: '瑰夏系列',
+      category: '清甜花香',
+    });
+    const afu = menu.beans.find((bean) => bean.id === 'afu')!;
+    expect(afu).toMatchObject({
+      process: '72 小时暗房厌氧日晒',
+      altitude: '2072m',
+      variety: '74158',
+    });
+    for (const bean of menu.beans) {
+      for (const [name, id] of [
+        ['拿铁', 'latte'],
+        ['Dirty', 'dirty'],
+        ['手冲', 'pour'],
+      ]) {
+        if (bean.recommended?.includes(name))
+          expect(menu.products.find((product) => product.id === id)?.beans).toContain(bean.id);
+      }
+    }
+    const login = await call('/api/owner/login', json({ passphrase: 'test-owner-passphrase' }));
+    const headers = { Cookie: `beixu_owner=${cookie(login, 'beixu_owner')}` };
+    const updated = { ...afu, altitude: '2073m', scales: [3, 5, 1, 3, 5] };
+    expect((await call('/api/owner/beans/afu', json(updated, 'PUT', headers))).status).toBe(200);
+    expect(
+      (await read<Menu>(await call('/api/menu'))).beans.find((bean) => bean.id === 'afu'),
+    ).toEqual(updated);
+    expect(
+      (await call('/api/owner/beans/afu', json({ ...afu, scales: [1, 2, 3] }, 'PUT', headers)))
+        .status,
+    ).toBe(400);
+  });
+
   it('注册、会话、菜单和配置校验可用', async () => {
     const id = 701;
     const register = await call(

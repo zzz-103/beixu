@@ -1,5 +1,7 @@
+import { beanScaleLabels } from '../shared/types';
 import {
   useCallback,
+  useId,
   useEffect,
   useMemo,
   useRef,
@@ -7,9 +9,10 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { ChevronRight, Check, Clock, Coffee, Heart, Star, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Clock, Coffee, Heart, Star, X } from 'lucide-react';
 import { ApiError, Link, api, json, useApp, useRemote, useNavigationGuard } from './core';
 import {
+  BrandLogo,
   Button,
   Choices,
   Empty,
@@ -65,8 +68,12 @@ function AuthLayout({ register, children }: { register: boolean; children: React
   return (
     <section className="auth-page">
       <header className="auth-header">
-        <Link to="/menu" className="brand" aria-label="杯序首页">
-          {menu?.shop.name || '杯序'}
+        <Link
+          to="/menu"
+          className="brand auth-brand"
+          aria-label={`${menu?.shop.name || '杯叙'}首页`}
+        >
+          <BrandLogo full name={menu?.shop.name} />
         </Link>
       </header>
       <figure className="auth-photo">
@@ -223,8 +230,9 @@ function MenuPage() {
     <section className="menu-page">
       <header className="menu-header">
         <div className="menu-brand">
-          <Link to="/menu" className="brand">
-            {menu.shop.name || '杯序'}
+          <Link to="/menu" className="brand brand-lockup">
+            <BrandLogo name={menu.shop.name} />
+            {menu.shop.name || '杯叙'}
           </Link>
           <span className="open-status">
             <Coffee size={13} />
@@ -323,6 +331,87 @@ function DrinkRow({
   );
 }
 
+function BeanSelector({
+  beans,
+  selectedId,
+  onSelect,
+  onFlavor,
+}: {
+  beans: MenuData['beans'];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onFlavor: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null | undefined>(undefined);
+  const id = useId();
+  const groups = new Map<string, MenuData['beans']>();
+  for (const bean of beans) {
+    const series = bean.series || '其他咖啡豆';
+    groups.set(series, [...(groups.get(series) || []), bean]);
+  }
+  const selected = beans.find((bean) => bean.id === selectedId);
+  const open = expanded === undefined ? selected?.series || groups.keys().next().value : expanded;
+  return (
+    <div className="bean-options bean-families">
+      {[...groups].map(([series, items], index) => {
+        const groupId = `${id}-${index}`;
+        const chosen = items.find((bean) => bean.id === selectedId);
+        return (
+          <section className="bean-family" key={series}>
+            <button
+              type="button"
+              className="bean-family-toggle"
+              aria-expanded={open === series}
+              aria-controls={groupId}
+              onClick={() => setExpanded(open === series ? null : series)}
+            >
+              <span className="bean-family-label">
+                {series === '意式拼配豆'
+                  ? '意式拼配'
+                  : series === '埃塞俄比亚精品咖啡'
+                    ? '埃塞精品'
+                    : series}
+                <span className="caption">{items.length} 款</span>
+              </span>
+              <span className="bean-family-selection">{chosen ? `已选 · ${chosen.name}` : ''}</span>
+              <ChevronDown size={15} aria-hidden="true" />
+            </button>
+            <div id={groupId} className="bean-family-options" hidden={open !== series}>
+              {items.map((bean) => (
+                <div
+                  className={`bean-option ${bean.id === selectedId ? 'selected' : ''}`}
+                  key={bean.id}
+                >
+                  <button
+                    type="button"
+                    className="bean-option"
+                    disabled={!bean.available}
+                    aria-pressed={bean.id === selectedId}
+                    onClick={() => onSelect(bean.id)}
+                  >
+                    <span className="radio" aria-hidden="true" />
+                    <span>
+                      <span className="name">
+                        {bean.name}
+                        {!bean.available ? <span className="tag muted"> · 暂缺</span> : null}
+                      </span>
+                      <span className="caption">{bean.tags.join(' · ')}</span>
+                    </span>
+                  </button>
+                  <TextButton onClick={() => onFlavor(bean.id)}>
+                    风味 <ChevronRight size={13} />
+                  </TextButton>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+      {!beans.length ? <p className="caption">这杯暂不需要咖啡豆。</p> : null}
+    </div>
+  );
+}
+
 function BeanSheet({
   bean,
   onClose,
@@ -333,34 +422,47 @@ function BeanSheet({
   onPick: () => void;
 }) {
   return (
-    <Sheet title={bean.name} onClose={onClose}>
-      <p className="bean-origin">
-        {bean.origin} · {bean.roast}
-      </p>
-      <p className="flavor-tags">{bean.tags.join(' · ')}</p>
-      {[
-        ['酸度', bean.scales[0] || 0],
-        ['苦度', bean.scales[1] || 0],
-        ['醇厚', bean.scales[2] || 0],
-      ].map(([label, value]) => (
-        <div className="bean-scale" key={String(label)}>
-          <span>{label}</span>
-          <div className="scale-track">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <i key={i} className={i <= Number(value) ? 'filled' : ''} />
-            ))}
-          </div>
+    <Sheet title={bean.name} onClose={onClose} className="bean-sheet">
+      <div className="bean-sheet-content" tabIndex={0} aria-label="咖啡豆风味详情">
+        <p className="bean-origin">
+          {bean.origin} · {bean.roast}
+        </p>
+        <p className="flavor-tags">{bean.tags.join(' · ')}</p>
+        <div className="bean-taste">
+          {bean.category ? <p>风味分类 · {bean.category}</p> : null}
+          {bean.series ? <p>系列 · {bean.series}</p> : null}
+          {bean.variety ? <p>品种 · {bean.variety}</p> : null}
+          {bean.altitude ? <p>海拔 · {bean.altitude}</p> : null}
+          {bean.process ? <p>处理法 · {bean.process}</p> : null}
+          {bean.recommended?.length ? <p>推荐饮品 · {bean.recommended.join('、')}</p> : null}
         </div>
-      ))}
-      <div className="bean-taste">
-        <p>前段 · {bean.front}</p>
-        <p>中段 · {bean.body}</p>
-        <p>尾韵 · {bean.finish}</p>
-        <p className="caption">{bean.note}</p>
+        <p className="caption">口感 · 满分 5 分</p>
+        {beanScaleLabels.map((label, index) => {
+          const value = bean.scales[index] ?? 0;
+          return (
+            <div className="bean-scale" key={String(label)}>
+              <span>{label}</span>
+              <div className="scale-track" aria-hidden="true">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <i key={i} className={i <= Number(value) ? 'filled' : ''} />
+                ))}
+              </div>
+              <span>{value}/5</span>
+            </div>
+          );
+        })}
+        <div className="bean-taste">
+          {bean.front ? <p>前段 · {bean.front}</p> : null}
+          {bean.body ? <p>风味特点 · {bean.body}</p> : null}
+          {bean.finish ? <p>尾韵 · {bean.finish}</p> : null}
+          <p className="caption">{bean.note}</p>
+        </div>
       </div>
-      <Button onClick={onPick} disabled={!bean.available}>
-        {bean.available ? '选用这款豆' : '这款豆暂缺'}
-      </Button>
+      <footer className="bean-sheet-footer">
+        <Button onClick={onPick} disabled={!bean.available}>
+          {bean.available ? '选用这款豆' : '这款豆暂缺'}
+        </Button>
+      </footer>
     </Sheet>
   );
 }
@@ -554,38 +656,12 @@ function CustomizePage({ productId }: { productId: string }) {
         {product.beans.length ? (
           <div className="option-group" role="group" aria-label="咖啡豆">
             <h2 className="choice-label">咖啡豆</h2>
-            <div className="bean-options">
-              {beans.length ? (
-                beans.map((bean) => (
-                  <div
-                    className={`bean-option ${bean.id === config.bean ? 'selected' : ''}`}
-                    key={bean.id}
-                  >
-                    <button
-                      type="button"
-                      className="bean-option"
-                      onClick={() => update({ bean: bean.id })}
-                      disabled={!bean.available}
-                      aria-pressed={bean.id === config.bean}
-                    >
-                      <span className="radio" />
-                      <span>
-                        <span className="name">
-                          {bean.name}
-                          {!bean.available ? <span className="tag muted"> · 暂缺</span> : null}
-                        </span>
-                        <span className="caption">{bean.tags.join(' · ')}</span>
-                      </span>
-                    </button>
-                    <TextButton onClick={() => setBeanSheet(bean.id)}>
-                      风味 <ChevronRight size={13} />
-                    </TextButton>
-                  </div>
-                ))
-              ) : (
-                <p className="caption">这杯暂不需要咖啡豆。</p>
-              )}
-            </div>
+            <BeanSelector
+              beans={beans}
+              selectedId={config.bean}
+              onSelect={(id) => update({ bean: id })}
+              onFlavor={setBeanSheet}
+            />
           </div>
         ) : null}
         {product.temps.length ? (
@@ -969,7 +1045,7 @@ function OrderDetailPage({ orderId }: { orderId: string }) {
         </div>
         <article className="receipt">
           <div className="receipt-head">
-            <div className="brand">{menu?.shop.name || '杯序'}</div>
+            <div className="brand">{menu?.shop.name || '杯叙'}</div>
             <span>
               {order.username} · NO. {padId(order.userId)}
             </span>
@@ -1190,7 +1266,9 @@ function ProfilePage() {
         <ErrorMessage message={error || remote.error} onRetry={remote.reload} />
         <h1 className="page-heading">我的熟客卡</h1>
         <article className="regular-card">
-          <div className="card-brand">{menu?.shop.name || '杯序'}</div>
+          <div className="card-brand">
+            <BrandLogo full name={menu?.shop.name} />
+          </div>
           <p className="card-subtitle">每一杯咖啡，都是一段故事的序章。</p>
           <span className="stamp">{profile.stats.level}</span>
           <p className="card-id">NO. {padId(profile.user.id)}</p>

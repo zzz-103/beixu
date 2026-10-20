@@ -360,3 +360,179 @@ select:focus-visible {
   margin-top: -8px;
   margin-bottom: 8px;
 }
+
+/* Bean families keep the choice area compact, with only one series expanded. */
+.bean-family + .bean-family {
+  border-top: 1px solid var(--border);
+}
+.bean-family-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+}
+.bean-family-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.bean-family-label .caption {
+  font-weight: 400;
+}
+.bean-family-selection {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--primary);
+}
+.bean-family-toggle > svg {
+  flex-shrink: 0;
+}
+.bean-family-toggle[aria-expanded='true'] > svg {
+  transform: rotate(180deg);
+}
+.bean-family-options {
+  max-height: 224px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 6px;
+}
+.bean-family-options > .bean-option {
+  min-height: 52px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  gap: 6px;
+}
+.bean-family-options > .bean-option.selected {
+  background: var(--primary-tint);
+}
+.bean-family-options .bean-option > span:last-child {
+  min-width: 0;
+}
+.bean-family-options .name {
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.bean-family-options .caption {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.bean-family-options .text-action {
+  flex-shrink: 0;
+  min-height: 44px;
+}
+.sheet.bean-sheet {
+  height: min(680px, 92dvh);
+  max-height: 92dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.bean-sheet > .sheet-handle,
+.bean-sheet > .sheet-header,
+.bean-sheet-footer {
+  flex-shrink: 0;
+}
+.bean-sheet > .sheet-header {
+  min-height: 60px;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.bean-sheet .sheet-header h2 {
+  font-size: 18px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.bean-sheet-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+.bean-sheet-content > .bean-taste:first-of-type {
+  margin-top: 0;
+}
+.bean-sheet-content > .caption {
+  margin-top: 14px;
+}
+.bean-sheet-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.bean-sheet-footer .primary {
+  margin-top: 0;
+}
+
+/* The full supplied mark belongs on brand surfaces; compact cup in navigation. */
+.brand-logo {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  vertical-align: middle;
+  background: var(--bg);
+}
+.brand-logo img {
+  mix-blend-mode: multiply;
+  display: block;
+  position: absolute;
+  max-width: none;
+}
+.brand-logo-full {
+  width: 112px;
+  height: 112px;
+}
+.brand-logo-full img {
+  width: 140px;
+  height: 140px;
+  left: -14px;
+  top: -14px;
+}
+.brand-logo-compact {
+  width: 44px;
+  height: 30px;
+}
+.brand-logo-compact img {
+  width: 62px;
+  height: 62px;
+  left: -9px;
+  top: -7px;
+}
+.brand.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+}
+.auth-page .auth-header {
+  height: 130px;
+  justify-content: center;
+}
+.auth-brand {
+  display: flex;
+}
+.regular-card .card-brand .brand-logo-full {
+  width: 76px;
+  height: 76px;
+}
+.regular-card .card-brand .brand-logo-full img {
+  width: 96px;
+  height: 96px;
+  top: -10px;
+  left: -10px;
+}
+
+.regular-card .brand-logo {
+  background: var(--surface);
+}

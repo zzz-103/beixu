@@ -21,7 +21,7 @@ npx wrangler d1 create beixu-db
 npm run db:migrate:remote
 ```
 
-这会创建表并初始化五类、四款饮品、三款豆子和杯序小店；不会导入原型虚构账号和历史。不要向远程执行 `scripts/demo.sql`。
+这会创建表并初始化五类、四款饮品、八款真实咖啡豆和杯叙小店；不会导入原型虚构账号和历史。不要向远程执行 `scripts/demo.sql`。
 
 ## 3. 设置店主口令
 
@@ -87,3 +87,7 @@ npx wrangler d1 execute beixu-restore --remote --file ./beixu-backup-ready.sql
 整个文件夹可复制到新位置。不需要携带 `node_modules/`、`dist/` 或 `.git/`；在新位置运行 `npm ci`。本地数据库如需迁移，另行保留 `.wrangler/`；生产D1不在你的电脑中。另行安全保存本地 `.dev.vars` 和必要备份。
 
 备份格式与导入限制参阅 [Cloudflare 官方导入导出文档](https://developers.cloudflare.com/d1/best-practices/import-export-data/)。
+
+已有数据库也需执行迁移（本地 `npm run db:migrate`，生产 `npm run db:migrate:remote`），依次应用 `0002_real_beans.sql`、`0003_bean_descriptions.sql`、`0004_brand_name.sql`。新增处理法、海拔、系列、风味分类、推荐饮品和预测标记；口感顺序为酸度、甜度、苦味、醇厚、余韵。保留历史订单快照。推荐饮品按用户最终汇总表；美式保留原适配并加入微风庄园瑰夏。
+
+`0003` 清理风味介绍的预测措辞，`0004` 将默认店名统一为「杯叙」。品牌原图随静态资源部署，无需另外上传。

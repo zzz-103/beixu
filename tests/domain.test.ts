@@ -20,7 +20,7 @@ const product: Product = {
 };
 
 const menu: MenuData = {
-  shop: { name: '杯序', message: '', recommendedId: 'latte', open: true },
+  shop: { name: '杯叙', message: '', recommendedId: 'latte', open: true },
   categories: [{ id: 'espresso', name: '意式咖啡', enabled: true, position: 0 }],
   products: [product],
   beans: [

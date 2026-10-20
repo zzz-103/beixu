@@ -31,7 +31,14 @@ export interface Bean {
   variety: string;
   roast: string;
   tags: string[];
+  /** 酸度、甜度、苦味、醇厚、余韵，依次为 0–5 分。 */
   scales: number[];
+  process?: string;
+  altitude?: string;
+  series?: string;
+  category?: string;
+  recommended?: string[];
+  predicted?: boolean;
   front: string;
   body: string;
   finish: string;
@@ -164,3 +171,5 @@ export const levelFor = (n: number) =>
   n >= 10 ? '吧台常驻' : n >= 6 ? '老位置' : n >= 3 ? '熟面孔' : n >= 1 ? '初次来坐' : '等你来坐';
 export const configSummary = (c: Config, beanName = '') =>
   [beanName, c.temp, c.milk, c.art && c.art + '拉花', c.extra].filter(Boolean).join(' · ');
+
+export const beanScaleLabels = ['酸度', '甜度', '苦味', '醇厚', '余韵'] as const;

@@ -199,6 +199,7 @@ type BeanRow = {
   roast: string;
   tags_json: string;
   scales_json: string;
+  metadata_json: string;
   front: string;
   body: string;
   finish: string;
@@ -259,6 +260,9 @@ function rowBean(row: BeanRow): Bean {
     roast: row.roast,
     tags: parseJson(row.tags_json, []),
     scales: parseJson(row.scales_json, []),
+    ...parseJson<
+      Pick<Bean, 'process' | 'altitude' | 'series' | 'category' | 'recommended' | 'predicted'>
+    >(row.metadata_json, {}),
     front: row.front,
     body: row.body,
     finish: row.finish,
@@ -314,7 +318,7 @@ async function menuData(db: D1Database): Promise<MenuData> {
       .all<ProductRow>(),
     db
       .prepare(
-        'SELECT id,name,origin,variety,roast,tags_json,scales_json,front,body,finish,note,available FROM beans ORDER BY rowid',
+        'SELECT id,name,origin,variety,roast,tags_json,scales_json,metadata_json,front,body,finish,note,available FROM beans ORDER BY rowid',
       )
       .all<BeanRow>(),
     db
@@ -505,12 +509,14 @@ function ensureBeanInput(value: unknown, idFallback?: string): Bean {
   const rawScales = data.scales;
   const scales =
     Array.isArray(rawScales) &&
-    rawScales.length === 3 &&
+    rawScales.length === 5 &&
     rawScales.every(
       (item) => typeof item === 'number' && Number.isInteger(item) && item >= 0 && item <= 5,
     )
       ? rawScales
-      : fail(400, 'VALIDATION_ERROR', '请检查咖啡豆内容。', { scales: '需要 3 个 0–5 的整数。' });
+      : fail(400, 'VALIDATION_ERROR', '请检查咖啡豆内容。', {
+          scales: '需要 5 个 0–5 的整数（酸度、甜度、苦味、醇厚、余韵）。',
+        });
   return {
     id: inputId(data.id, idFallback, 'bean'),
     name: text(data.name, 'name', 80, true),
@@ -519,6 +525,12 @@ function ensureBeanInput(value: unknown, idFallback?: string): Bean {
     roast: text(data.roast ?? '', 'roast', 80),
     tags: stringArray(data.tags ?? [], 'tags'),
     scales,
+    process: text(data.process ?? '', 'process', 160),
+    altitude: text(data.altitude ?? '', 'altitude', 160),
+    series: text(data.series ?? '', 'series', 160),
+    category: text(data.category ?? '', 'category', 160),
+    recommended: stringArray(data.recommended ?? [], 'recommended'),
+    predicted: data.predicted === undefined ? false : bool(data.predicted, 'predicted'),
     front: text(data.front ?? '', 'front', 300),
     body: text(data.body ?? '', 'body', 300),
     finish: text(data.finish ?? '', 'finish', 300),
@@ -1157,8 +1169,8 @@ app.put('/api/owner/beans/:id', async (c) => {
 async function saveBean(db: D1Database, bean: Bean, update: boolean): Promise<void> {
   try {
     const sql = update
-      ? 'UPDATE beans SET name=?,origin=?,variety=?,roast=?,tags_json=?,scales_json=?,front=?,body=?,finish=?,note=?,available=? WHERE id=?'
-      : 'INSERT INTO beans (id,name,origin,variety,roast,tags_json,scales_json,front,body,finish,note,available) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
+      ? 'UPDATE beans SET name=?,origin=?,variety=?,roast=?,tags_json=?,scales_json=?,metadata_json=?,front=?,body=?,finish=?,note=?,available=? WHERE id=?'
+      : 'INSERT INTO beans (id,name,origin,variety,roast,tags_json,scales_json,metadata_json,front,body,finish,note,available) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
     const args = update
       ? [
           bean.name,
@@ -1167,6 +1179,14 @@ async function saveBean(db: D1Database, bean: Bean, update: boolean): Promise<vo
           bean.roast,
           JSON.stringify(bean.tags),
           JSON.stringify(bean.scales),
+          JSON.stringify({
+            process: bean.process,
+            altitude: bean.altitude,
+            series: bean.series,
+            category: bean.category,
+            recommended: bean.recommended,
+            predicted: bean.predicted,
+          }),
           bean.front,
           bean.body,
           bean.finish,
@@ -1182,6 +1202,14 @@ async function saveBean(db: D1Database, bean: Bean, update: boolean): Promise<vo
           bean.roast,
           JSON.stringify(bean.tags),
           JSON.stringify(bean.scales),
+          JSON.stringify({
+            process: bean.process,
+            altitude: bean.altitude,
+            series: bean.series,
+            category: bean.category,
+            recommended: bean.recommended,
+            predicted: bean.predicted,
+          }),
           bean.front,
           bean.body,
           bean.finish,

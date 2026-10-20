@@ -50,7 +50,7 @@ function App() {
               ? '私人咖啡馆'
               : '找不到页面')) +
       ' · ' +
-      (menu?.shop.name || '杯序');
+      (menu?.shop.name || '杯叙');
   }, [path, menu?.shop.name, known]);
   return (
     <div

@@ -67,7 +67,7 @@ const noOverflow = async (p) =>
 let originalMenu;
 try {
   await page.goto('/login');
-  assert.match(await page.title(), /朋友登录.*杯序/);
+  assert.match(await page.title(), /朋友登录.*杯叙/);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
   await see(page.getByRole('heading', { name: '来啦，坐一会儿。' }));
   await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -301,6 +301,11 @@ try {
   await admin.getByRole('button', { name: '上移' + categoryName, exact: true }).click();
   assert.equal((await reorder).status(), 200);
   await call(owner, `/api/owner/categories/${category.id}`, 'PUT', { ...category, enabled: false });
+  await call(owner, `/api/owner/products/${createdProduct.id}`, 'PUT', {
+    ...createdProduct,
+    categoryId: category.id,
+    available: false,
+  });
   done('分类新增和可访问排序');
   // Cancelled orders also remain in history; paging must append the actual second page.
   for (let n = 0; n < 20; n++) {
